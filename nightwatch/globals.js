@@ -21,7 +21,7 @@ const _testCasesData = {};
 let currentTestUUID = '';
 let workerList = {};
 let testRunner = '';
-const testEventPromises = [];
+let testEventPromises = [];
 
 eventHelper.eventEmitter.on(EVENTS.LOG_INIT, (loggingData) => {
   const testCaseStartedId = loggingData.message.replace('TEST-OBSERVABILITY-PID-TESTCASE-MAPPING-', '').slice(1, -1);
