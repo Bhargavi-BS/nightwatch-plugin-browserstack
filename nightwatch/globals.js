@@ -475,10 +475,6 @@ module.exports = {
         await helper.deleteRerunFile();
       }
       try {
-        if (testEventPromises.length > 0) {
-          await Promise.all(testEventPromises);
-          testEventPromises.length = 0; // Clear the array
-        }
         await testObservability.stopBuildUpstream();
         if (process.env.BROWSERSTACK_TESTHUB_UUID) {
           Logger.info(`\nVisit https://automation.browserstack.com/builds/${process.env.BROWSERSTACK_TESTHUB_UUID} to view build report, insights, and many more debugging information all at one place!\n`);
@@ -503,6 +499,10 @@ module.exports = {
 
   // This will be run after each test suite is finished
   async afterEach(settings) {
+    if (testEventPromises.length > 0) {
+          await Promise.all(testEventPromises);
+          testEventPromises.length = 0; // Clear the array
+    }
   },
 
   beforeChildProcess(settings) {
