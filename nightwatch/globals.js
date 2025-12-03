@@ -21,7 +21,7 @@ const _testCasesData = {};
 let currentTestUUID = '';
 let workerList = {};
 let testRunner = '';
-let testEventPromises = [];
+const testEventPromises = [];
 
 eventHelper.eventEmitter.on(EVENTS.LOG_INIT, (loggingData) => {
   const testCaseStartedId = loggingData.message.replace('TEST-OBSERVABILITY-PID-TESTCASE-MAPPING-', '').slice(1, -1);
@@ -500,8 +500,8 @@ module.exports = {
   // This will be run after each test suite is finished
   async afterEach(settings) {
     if (testEventPromises.length > 0) {
-          await Promise.all(testEventPromises);
-          testEventPromises.length = 0; // Clear the array
+      await Promise.all(testEventPromises);
+      testEventPromises.length = 0; // Clear the array
     }
   },
 
