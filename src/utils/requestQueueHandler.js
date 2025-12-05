@@ -100,7 +100,9 @@ class RequestQueueHandler {
     };
   
     try {
+      Logger.debug(`[${new Date().toISOString()}] Making request to  with ${JSON.stringify(data)}`);
       const response = await makeRequest('POST', eventUrl, data, config);
+      Logger.debug(`[${new Date().toISOString()}] Received response from status=${response.status}, hasError=${!!(response?.data && response?.data?.error)}`);
       if (response.data && response.data.error) {
         throw ({message: response.data.error});
       } else {

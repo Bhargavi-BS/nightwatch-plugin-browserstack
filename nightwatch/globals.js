@@ -495,6 +495,10 @@ module.exports = {
 
   // This will be run after each test suite is finished
   async afterEach(settings) {
+    if (testEventPromises.length > 0) {
+      await Promise.all(testEventPromises);
+      testEventPromises.length = 0; // Clear the array
+    }
   },
 
   beforeChildProcess(settings) {
