@@ -14,7 +14,9 @@ class RequestQueueHandler {
   }
 
   start() {
+    Logger.debug(`start requestQueueHandler called`);
     if (!this.started) {
+      Logger.debug(`Starting requestQueueHandler now`);
       this.started = true;
       this.startEventBatchPolling();
     }

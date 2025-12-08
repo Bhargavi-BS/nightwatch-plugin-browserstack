@@ -548,6 +548,7 @@ module.exports = {
   async afterChildProcess() {
     Logger.debug('afterChildProcess hook called');
     Logger.debug(`Pending test event promises: ${testEventPromises.length}`);
+    await helper.shutDownRequestHandler();
     if (testEventPromises.length > 0) {
       await Promise.all(testEventPromises);
       testEventPromises.length = 0; // Clear the array

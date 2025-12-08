@@ -555,7 +555,7 @@ exports.uploadEventData = async (eventData) => {
     }
     let data = eventData;
     let event_api_url = 'api/v1/event';
-
+    Logger.debug(`Starting requestQueueHandler before uploading event data for {${eventData.event_type}}`);
     requestQueueHandler.start();
     const {
       shouldProceed,
