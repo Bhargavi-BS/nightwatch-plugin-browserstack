@@ -32,8 +32,10 @@ class RequestQueueHandler {
       }
 
       this.queue.push(event);
+      Logger.debug(`Current queue: ${JSON.stringify(this.queue)}`);
       let data = null;
       const shouldProceed = this.shouldProceed();
+      Logger.debug(`Should proceed with batch: ${shouldProceed}`);
       if (shouldProceed) {
         data = this.queue.slice(0, BATCH_SIZE);
         this.queue.splice(0, BATCH_SIZE);
