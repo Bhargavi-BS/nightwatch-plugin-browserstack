@@ -523,12 +523,15 @@ class TestObservability {
       } 
       await this.processTestRunData (eventData, uuid);
     }
-
     const uploadData = {
       event_type: eventType,
       test_run: testData
     };
+    
+    Logger.debug(`Uploading Test Data for ${eventType}: ${JSON.stringify(testData)}`);
     await helper.uploadEventData(uploadData);
+    Logger.debug(`Uploaded Test Data for ${eventType}`);
+
   }
 
   async sendHookRunEvent(eventData, testFileReport, eventType, uuid, hookType, sectionName, hooks) {

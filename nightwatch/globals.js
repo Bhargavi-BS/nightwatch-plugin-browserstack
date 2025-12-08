@@ -273,13 +273,16 @@ module.exports = {
       const uuid = process.env.TEST_RUN_UUID || TestMap.getUUID(test);
       if (TestMap.hasTestFinished(uuid)) {
         Logger.debug(`Test with UUID ${uuid} already marked as finished, skipping duplicate TestRunFinished event`);
-
         return;
       }
       try {
+        Logger.debug(`Going for accessibility processing: ${uuid}`);
         await accessibilityAutomation.afterEachExecution(test, uuid);
+        Logger.debug(`Completed accessibility processing: ${uuid}`);
         if (testRunner !== 'cucumber'){
+          Logger.debug(`Sending TestRunFinished event for UUID from globals: ${uuid}`);
           testEventPromises.push(testObservability.sendTestRunEvent('TestRunFinished', test, uuid));
+          Logger.debug(`Pushed in the testEventPromises for TestRunFinished event: ${uuid}`);
           TestMap.markTestFinished(uuid);
         }
         
@@ -473,6 +476,8 @@ module.exports = {
         await helper.deleteRerunFile();
       }
       try {
+        Logger.debug('after hook called');
+        Logger.debug(`Pending test event promises: ${testEventPromises.length}`);
         if (testEventPromises.length > 0) {
           await Promise.all(testEventPromises);
           testEventPromises.length = 0; // Clear the array
@@ -541,6 +546,8 @@ module.exports = {
   },
 
   async afterChildProcess() {
+    Logger.debug('afterChildProcess hook called');
+    Logger.debug(`Pending test event promises: ${testEventPromises.length}`);
     if (testEventPromises.length > 0) {
       await Promise.all(testEventPromises);
       testEventPromises.length = 0; // Clear the array
