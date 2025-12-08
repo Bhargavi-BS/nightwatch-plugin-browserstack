@@ -274,7 +274,9 @@ class TestObservability {
     await helper.uploadPending();
     await helper.shutDownRequestHandler();
     try {
+      Logger.debug(`[${new Date().toISOString()}] Making request to stop build ${process.env.BROWSERSTACK_TESTHUB_UUID}`);
       const response = await makeRequest('PUT', `api/v1/builds/${process.env.BROWSERSTACK_TESTHUB_UUID}/stop`, data, config, API_URL, false);
+      Logger.debug(`[${new Date().toISOString()}] Received response from stop build: status=${response.status}, hasError=${!!(response.data?.error)}`);
       if (response.data?.error) {
         throw {message: response.data.error};
       } else {
@@ -521,12 +523,15 @@ class TestObservability {
       } 
       await this.processTestRunData (eventData, uuid);
     }
-
     const uploadData = {
       event_type: eventType,
       test_run: testData
     };
+    
+    Logger.debug(`Uploading Test Data for ${eventType}: ${JSON.stringify(testData)}`);
     await helper.uploadEventData(uploadData);
+    Logger.debug(`Uploaded Test Data for ${eventType}`);
+
   }
 
   async sendHookRunEvent(eventData, testFileReport, eventType, uuid, hookType, sectionName, hooks) {

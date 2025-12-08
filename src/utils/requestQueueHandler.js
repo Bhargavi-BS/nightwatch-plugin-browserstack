@@ -21,6 +21,7 @@ class RequestQueueHandler {
   }
 
   add (event) {
+    Logger.debug(`Adding event to queue: ${JSON.stringify(event)}`);
     if (this.BATCH_EVENT_TYPES.includes(event.event_type)) {
       if (event.logs && event.logs[0] && event.logs[0].kind === 'TEST_SCREENSHOT') {
         return {
@@ -36,6 +37,7 @@ class RequestQueueHandler {
       if (shouldProceed) {
         data = this.queue.slice(0, BATCH_SIZE);
         this.queue.splice(0, BATCH_SIZE);
+        Logger.debug(`Processing batch of events: ${JSON.stringify(data)}, remaining queue: ${JSON.stringify(this.queue)}`);
         this.resetEventBatchPolling();
       }
 
@@ -63,15 +65,18 @@ class RequestQueueHandler {
 
   startEventBatchPolling () {
     this.pollEventBatchInterval = setInterval(async () => {
+      Logger.debug(`Polling event batch queue, current queue length: ${this.queue.length}`);
       if (this.queue.length > 0) {
         const data = this.queue.slice(0, BATCH_SIZE);
         this.queue.splice(0, BATCH_SIZE);
+        Logger.debug(`Sending event batch queue`);
         await this.batchAndPostEvents(this.eventUrl, 'Interval-Queue', data);
       }
     }, BATCH_INTERVAL);
   }
 
   resetEventBatchPolling () {
+    Logger.debug(`Resetting event batch polling`);
     this.removeEventBatchPolling('RESETTING');
     this.startEventBatchPolling();
   }
@@ -100,7 +105,9 @@ class RequestQueueHandler {
     };
   
     try {
+      Logger.debug(`[${new Date().toISOString()}] Making request to  with ${JSON.stringify(data)}`);
       const response = await makeRequest('POST', eventUrl, data, config);
+      Logger.debug(`[${new Date().toISOString()}] Received response from status=${response.status}, hasError=${!!(response?.data && response?.data?.error)}`);
       if (response.data && response.data.error) {
         throw ({message: response.data.error});
       } else {
