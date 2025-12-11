@@ -2,6 +2,7 @@ const os = require('os');
 const fs = require('fs');
 const fsPromises = fs.promises;
 const path = require('path');
+const glob = require('glob');
 const {promisify} = require('util');
 const gitRepoInfo = require('git-repo-info');
 const gitconfig = require('gitconfiglocal');
@@ -16,6 +17,7 @@ const LogPatcher = require('./logPatcher');
 const BSTestOpsPatcher = new LogPatcher({});
 const sessions = {};
 const {execSync} = require('child_process');
+const request = require('@cypress/request');
 
 console = {};
 Object.keys(consoleHolder).forEach(method => {
@@ -98,6 +100,10 @@ exports.isTestHubBuild = (pluginSettings = {}, isBuildStart = false) => {
   
   return this.isTestObservabilitySession() || this.isAccessibilitySession();
   
+};
+
+exports.isAppAccessibilitySession = () => {
+  return process.env.IS_APP_ACCESSIBILITY === 'true';
 };
 
 exports.isAccessibilityEnabled = (settings) => {
@@ -888,84 +894,7 @@ exports.truncateString = (field, truncateSizeInBytes) => {
 
 // Helper function to check if a pattern contains glob characters
 exports.isGlobPattern = (pattern) => {
-  return pattern.includes('*') || pattern.includes('?') || pattern.includes('[');
-};
-
-// Helper function to recursively find files matching a pattern
-exports.findFilesRecursively = (dir, pattern) => {
-  const files = [];
-  try {
-    if (!fs.existsSync(dir)) {
-      return files;
-    }
-    
-    const entries = fs.readdirSync(dir, {withFileTypes: true});
-    
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      
-      if (entry.isDirectory()) {
-        // Recursively search subdirectories
-        files.push(...exports.findFilesRecursively(fullPath, pattern));
-      } else if (entry.isFile()) {
-        const relativePath = path.relative(process.cwd(), fullPath);
-        
-        // Enhanced pattern matching for glob patterns
-        if (exports.matchesGlobPattern(relativePath, pattern)) {
-          files.push(relativePath);
-        }
-      }
-    }
-  } catch (err) {
-    Logger.debug(`Error reading directory ${dir}: ${err.message}`);
-  }
-  
-  return files;
-};
-
-// Helper function to match a file path against a glob pattern
-exports.matchesGlobPattern = (filePath, pattern) => {
-  // Normalize paths to use forward slashes
-  const normalizedPath = filePath.replace(/\\/g, '/');
-  const normalizedPattern = pattern.replace(/\\/g, '/');
-  
-  // Convert glob pattern to regex step by step
-  let regexPattern = normalizedPattern;
-  
-  // First, handle ** patterns (must be done before single *)
-  // ** should match zero or more directories
-  regexPattern = regexPattern.replace(/\*\*/g, '§DOUBLESTAR§');
-  
-  // Escape regex special characters except the placeholders
-  regexPattern = regexPattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-  
-  // Now handle single * and ? patterns
-  regexPattern = regexPattern.replace(/\*/g, '[^/]*'); // * matches anything except path separators
-  regexPattern = regexPattern.replace(/\?/g, '[^/]'); // ? matches single character except path separator
-  
-  // Finally, replace ** placeholder with regex for any path (including zero directories)
-  regexPattern = regexPattern.replace(/§DOUBLESTAR§/g, '.*?');
-  
-  // Special case: if pattern ends with /**/* we need to handle direct files in the base directory
-  // Convert patterns like "dir/**/*" to also match "dir/*"
-  if (normalizedPattern.includes('/**/')) {
-    const baseRegex = regexPattern;
-    const alternativeRegex = regexPattern.replace(/\/\.\*\?\//g, '/');
-    regexPattern = `(?:${baseRegex}|${alternativeRegex})`;
-  }
-  
-  // Ensure pattern matches from start to end
-  regexPattern = '^' + regexPattern + '$';
-  
-  try {
-    const regex = new RegExp(regexPattern);
-
-    return regex.test(normalizedPath);
-  } catch (err) {
-    Logger.debug(`Error in glob pattern matching: ${err.message}`);
-
-    return false;
-  }
+  return glob.hasMagic(pattern);
 };
 
 // Helper function to resolve and collect test files from a path/pattern
@@ -1039,36 +968,17 @@ exports.findTestFilesInDirectory = (dir) => {
 exports.expandGlobPattern = (pattern) => {
   Logger.debug(`Expanding glob pattern: ${pattern}`);
   
-  // Extract the base directory from the pattern
-  const parts = pattern.split(/[/\\]/);
-  let baseDir = '.';
-  let patternStart = 0;
-  
-  // Find the first part that contains glob characters
-  for (let i = 0; i < parts.length; i++) {
-    if (exports.isGlobPattern(parts[i])) {
-      patternStart = i;
-      break;
-    }
-    if (i === 0 && parts[i] !== '.') {
-      baseDir = parts[i];
-    } else if (i > 0) {
-      baseDir = path.join(baseDir, parts[i]);
-    }
+  try {
+    const files = glob.sync(pattern);
+    
+    Logger.debug(`Found ${files.length} files matching pattern: ${pattern}`);
+
+    return files;
+  } catch (err) {
+    Logger.debug(`Error expanding glob pattern: ${err.message}`);
+
+    return [];
   }
-  
-  // If baseDir doesn't exist, try current directory
-  if (!fs.existsSync(baseDir)) {
-    Logger.debug(`Base directory ${baseDir} doesn't exist, using current directory`);
-    baseDir = '.';
-  }
-  
-  Logger.debug(`Base directory: ${baseDir}, Pattern: ${pattern}`);
-  
-  const files = exports.findFilesRecursively(baseDir, pattern);
-  Logger.debug(`Found ${files.length} files matching pattern: ${pattern}`);
-  
-  return files;
 };
 
 /**
@@ -1399,4 +1309,103 @@ exports.patchBrowserTerminateCommand = () =>{
     return originalFn.apply(this, args);
   };
 };
+
+exports.formatString = (template, ...values) => {
+  let i = 0;
+  if (template === null) {
+    return '';
+  }
+
+  return template.replace(/%s/g, () => {
+    const value = values[i++];
+
+    return value !== null && value !== undefined ? value : '';
+  });
+};
+
+exports.pollApi = async (url, params, headers, upperLimit, startTime = Date.now()) => {
+  params.timestamp = Math.round(Date.now() / 1000);
+  Logger.debug(`current timestamp ${params.timestamp}`);
+
+  try {
+    const queryString = new URLSearchParams(params).toString();
+    const fullUrl = `${url}?${queryString}`;
+    
+    const response = await new Promise((resolve, reject) => {
+      request({
+        method: 'GET',
+        url: fullUrl,
+        headers: headers,
+        json: false
+      }, (error, response, body) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+
+    const responseData = JSON.parse(response.body);
+    
+    if (response.statusCode === 404) {
+      const nextPollTime = parseInt(response.headers?.next_poll_time, 10) * 1000;
+      Logger.debug(`nextPollTime: ${nextPollTime}`);
+
+      if (isNaN(nextPollTime)) {
+        Logger.warn('Invalid or missing `nextPollTime` header. Stopping polling.');
+
+        return {
+          data: {},
+          headers: response.headers || {},
+          message: 'Invalid nextPollTime header value. Polling stopped.'
+        };
+      }
+
+      // Stop polling if the upper time limit is reached
+      if (nextPollTime > upperLimit) {
+        Logger.warn('Polling stopped due to upper time limit.');
+
+        return {
+          data: {},
+          headers: response.headers || {},
+          message: 'Polling stopped due to upper time limit.'
+        };
+      }
+
+      const elapsedTime = Math.max(0, nextPollTime - Date.now());
+      Logger.debug(
+        `elapsedTime ${elapsedTime} nextPollTimes ${nextPollTime} upperLimit ${upperLimit}`
+      );
+
+      Logger.debug(`Polling for results again in ${elapsedTime}ms`);
+
+      // Wait for the specified time and poll again
+      await new Promise((resolve) => setTimeout(resolve, elapsedTime));
+
+      return exports.pollApi(url, params, headers, upperLimit, startTime);
+    }
+    
+    return {
+      data: responseData,
+      headers: response.headers,
+      message: 'Polling succeeded.'
+    };
+  } catch (error) {
+    if (error.response) {
+      throw {
+        data: {},
+        headers: {},
+        message: error.response.body ? JSON.parse(error.response.body).message : 'Unknown error'
+      };
+    } else {
+      Logger.error(`Unexpected error occurred: ${error}`);
+
+      return {data: {}, headers: {}, message: 'Unexpected error occurred.'};
+    }
+  }
+};
+
+
+
 
